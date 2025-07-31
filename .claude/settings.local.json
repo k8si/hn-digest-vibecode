@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(uv run:*)",
+      "Bash(ls:*)",
+      "Bash(pytest:*)",
+      "Bash(pip install:*)",
+      "Bash(uv add:*)",
+      "Bash(python:*)",
+      "Bash(uv sync:*)",
+      "Bash(grep:*)",
+      "Bash(mkdir:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(mv:*)",
+      "Bash(env)"
+    ],
+    "deny": []
+  }
+}
