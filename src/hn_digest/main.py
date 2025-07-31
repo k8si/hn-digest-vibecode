@@ -3,10 +3,14 @@ import argparse
 import logging
 import sys
 from typing import List, Dict
+from datetime import datetime
 
 from .config import Config, setup_logging
 from .hn_client import HNClient
 from .content_filter import ContentFilter
+from .article_scraper import ArticleScraper
+from .ai_summarizer import AISummarizer
+from .summary_formatter import SummaryFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +20,9 @@ class HNDigestApp:
     def __init__(self):
         self.hn_client = HNClient()
         self.content_filter = ContentFilter()
+        self.article_scraper = ArticleScraper()
+        self.ai_summarizer = AISummarizer()
+        self.summary_formatter = SummaryFormatter()
     
     def fetch_and_filter_stories(self) -> List[Dict]:
         """Fetch stories from HackerNews and filter for AI content."""
@@ -27,11 +34,15 @@ class HNDigestApp:
             logger.error("Failed to fetch top stories from HackerNews")
             return []
         
+        logger.debug(f"Fetched {len(story_ids)} story IDs from HackerNews")
+        
         # Get story details
         stories = self.hn_client.get_stories_batch(story_ids)
         if not stories:
-            logger.error("Failed to fetch story details")
+            logger.error(f"Failed to fetch story details for {len(story_ids)} story IDs")
             return []
+        
+        logger.debug(f"Successfully fetched details for {len(stories)} stories")
         
         # Filter for AI content
         ai_stories = self.content_filter.filter_and_score_stories(stories)
@@ -40,15 +51,72 @@ class HNDigestApp:
         summary = self.content_filter.get_filter_summary(len(stories), len(ai_stories))
         logger.info(summary)
         
+        if not ai_stories:
+            logger.warning(f"No AI-related stories found among {len(stories)} total stories")
+            logger.debug("Consider checking AI keyword list or filtering criteria if this seems unexpected")
+        
         return ai_stories
     
     def run_scan_only(self) -> List[Dict]:
         """Run scan and filtering only (for testing)."""
         return self.fetch_and_filter_stories()
     
+    def scrape_and_summarize_stories(self, stories: List[Dict]) -> Dict[str, str]:
+        """Scrape article content and generate AI summaries."""
+        summaries = {}
+        scraping_stats = {
+            'successful_scrapes': 0,
+            'failed_scrapes': 0,
+            'summaries_generated': 0,
+            'failure_reasons': {}
+        }
+        
+        logger.info(f"Scraping and summarizing {len(stories)} articles")
+        
+        for story in stories:
+            url = story.get('url', '')
+            title = story.get('title', '')
+            
+            if not url:
+                logger.debug(f"No URL for story: {title}")
+                scraping_stats['failed_scrapes'] += 1
+                reason = 'no_url'
+                scraping_stats['failure_reasons'][reason] = scraping_stats['failure_reasons'].get(reason, 0) + 1
+                continue
+            
+            # Scrape article content
+            content, metadata = self.article_scraper.scrape_article(url)
+            
+            if content:
+                scraping_stats['successful_scrapes'] += 1
+                
+                # Generate AI summary
+                summary = self.ai_summarizer.summarize_article(title, content, url, metadata)
+                
+                if summary:
+                    summaries[url] = summary
+                    scraping_stats['summaries_generated'] += 1
+                    logger.debug(f"Generated summary for: {title[:50]}...")
+                else:
+                    # Use fallback summary
+                    fallback = self.ai_summarizer.create_fallback_summary(title, url, "AI summarization failed")
+                    summaries[url] = fallback
+                    reason = 'ai_failed'
+                    scraping_stats['failure_reasons'][reason] = scraping_stats['failure_reasons'].get(reason, 0) + 1
+            else:
+                scraping_stats['failed_scrapes'] += 1
+                # Create fallback summary for scraping failures
+                fallback = self.ai_summarizer.create_fallback_summary(title, url, "content scraping failed")
+                summaries[url] = fallback
+                reason = 'scraping_failed'
+                scraping_stats['failure_reasons'][reason] = scraping_stats['failure_reasons'].get(reason, 0) + 1
+        
+        logger.info(f"Scraping complete: {scraping_stats['successful_scrapes']}/{len(stories)} successful, {scraping_stats['summaries_generated']} AI summaries generated")
+        
+        return summaries
+    
     def run_full_digest(self):
-        """Run full digest process (scan, summarize, email)."""
-        # This will be implemented in later phases
+        """Run full digest process (scan, summarize, format)."""
         stories = self.fetch_and_filter_stories()
         
         if not stories:
@@ -56,8 +124,19 @@ class HNDigestApp:
             return
         
         logger.info(f"Found {len(stories)} AI stories to process")
-        for story in stories[:5]:  # Show top 5 for now
-            logger.info(f"- {story['title']} (score: {story['combined_score']})")
+        
+        # Scrape and summarize articles
+        summaries = self.scrape_and_summarize_stories(stories)
+        
+        # Format the digest
+        digest_text = self.summary_formatter.format_digest(stories, summaries, datetime.now())
+        
+        # For now, just print the digest (email sending will be in Phase 3)
+        print("\n" + "="*60)
+        print("GENERATED DIGEST")
+        print("="*60)
+        print(digest_text)
+        print("="*60)
 
 def create_cli_parser() -> argparse.ArgumentParser:
     """Create command line argument parser."""
@@ -99,6 +178,10 @@ def main():
     # Validate configuration
     if not Config.EMAIL_RECIPIENT:
         logger.error("EMAIL_RECIPIENT not configured")
+        sys.exit(1)
+    
+    if args.mode == 'full' and not Config.ANTHROPIC_API_KEY:
+        logger.error("ANTHROPIC_API_KEY not configured but required for full mode")
         sys.exit(1)
     
     # Create and run application

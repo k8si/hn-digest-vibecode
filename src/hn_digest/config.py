@@ -22,7 +22,10 @@ def setup_logging():
 class Config:
     SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
     EMAIL_RECIPIENT = os.getenv('EMAIL_RECIPIENT', 'ksilverstein@mozilla.com')
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+    ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+    
+    # AI Summarization settings
+    ANTHROPIC_MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-3-haiku-20240307')
     
     # HackerNews API settings
     HN_API_BASE_URL = 'https://hacker-news.firebaseio.com/v0'

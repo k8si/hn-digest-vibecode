@@ -123,3 +123,95 @@ class TestIntegration:
                 # Should only include the AI story that was successfully fetched
                 assert len(result_stories) == 1
                 assert result_stories[0]['title'] == 'AI breakthrough announced'
+    
+    def test_full_digest_pipeline_integration(self):
+        """Test complete pipeline from HN stories to formatted digest."""
+        # Mock the scraper and summarizer instances on the app
+        mock_scraper = Mock()
+        mock_summarizer = Mock()
+        
+        # Replace the app's instances with mocks
+        self.app.article_scraper = mock_scraper
+        self.app.ai_summarizer = mock_summarizer
+        
+        # Mock successful scraping and summarization
+        mock_scraper.scrape_article.return_value = ("Article content about AI breakthrough", {"title": "Article Title"})
+        mock_summarizer.summarize_article.return_value = "AI breakthrough summary"
+        
+        # Mock HN API responses for a single AI story
+        with patch.object(self.app.hn_client, 'get_top_stories') as mock_top_stories:
+            with patch.object(self.app.hn_client, 'get_stories_batch') as mock_stories:
+                mock_top_stories.return_value = [1]
+                mock_stories.return_value = [{
+                    'id': 1, 
+                    'title': 'OpenAI announces GPT-5', 
+                    'url': 'https://openai.com/gpt5', 
+                    'score': 300, 
+                    'by': 'user1', 
+                    'time': 1234567890, 
+                    'descendants': 100
+                }]
+                
+                # Run scrape and summarize
+                stories = self.app.fetch_and_filter_stories()
+                summaries = self.app.scrape_and_summarize_stories(stories)
+                
+                # Verify the pipeline worked
+                assert len(stories) == 1
+                assert stories[0]['title'] == 'OpenAI announces GPT-5'
+                assert 'https://openai.com/gpt5' in summaries
+                assert summaries['https://openai.com/gpt5'] == 'AI breakthrough summary'
+                
+                # Verify scraper was called correctly
+                mock_scraper.scrape_article.assert_called_once_with('https://openai.com/gpt5')
+                
+                # Verify summarizer was called correctly
+                mock_summarizer.summarize_article.assert_called_once_with(
+                    'OpenAI announces GPT-5',
+                    'Article content about AI breakthrough',
+                    'https://openai.com/gpt5',
+                    {"title": "Article Title"}
+                )
+    
+    def test_scraping_failure_fallback(self):
+        """Test fallback handling when article scraping fails."""
+        mock_scraper = Mock()
+        mock_summarizer = Mock()
+        
+        # Replace the app's instances with mocks
+        self.app.article_scraper = mock_scraper
+        self.app.ai_summarizer = mock_summarizer
+        
+        # Mock scraping failure
+        mock_scraper.scrape_article.return_value = (None, None)
+        mock_summarizer.create_fallback_summary.return_value = "Fallback summary - content unavailable"
+        
+        # Mock HN API responses
+        with patch.object(self.app.hn_client, 'get_top_stories') as mock_top_stories:
+            with patch.object(self.app.hn_client, 'get_stories_batch') as mock_stories:
+                mock_top_stories.return_value = [1]
+                mock_stories.return_value = [{
+                    'id': 1,
+                    'title': 'AI Article Behind Paywall',
+                    'url': 'https://premium.site.com/ai-article',
+                    'score': 150,
+                    'by': 'user1',
+                    'time': 1234567890,
+                    'descendants': 25
+                }]
+                
+                # Run the process
+                stories = self.app.fetch_and_filter_stories()
+                summaries = self.app.scrape_and_summarize_stories(stories)
+                
+                # Verify fallback was used
+                assert len(summaries) == 1
+                assert 'https://premium.site.com/ai-article' in summaries
+                assert 'Fallback summary - content unavailable' in summaries['https://premium.site.com/ai-article']
+                
+                # Verify fallback summary was created
+                mock_summarizer.create_fallback_summary.assert_called_once_with(
+                    'AI Article Behind Paywall',
+                    'https://premium.site.com/ai-article',
+                    'content scraping failed'
+                )
