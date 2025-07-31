@@ -22,6 +22,7 @@ def setup_logging():
 class Config:
     SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
     EMAIL_RECIPIENT = os.getenv('EMAIL_RECIPIENT', 'ksilverstein@mozilla.com')
+    USERNAME = os.getenv('USERNAME', 'Kate')
     ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
     
     # AI Summarization settings

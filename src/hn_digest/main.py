@@ -11,6 +11,8 @@ from .content_filter import ContentFilter
 from .article_scraper import ArticleScraper
 from .ai_summarizer import AISummarizer
 from .summary_formatter import SummaryFormatter
+from .email_formatter import EmailFormatter
+from .email_sender import EmailSender
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,8 @@ class HNDigestApp:
         self.article_scraper = ArticleScraper()
         self.ai_summarizer = AISummarizer()
         self.summary_formatter = SummaryFormatter()
+        self.email_formatter = EmailFormatter()
+        self.email_sender = None  # Initialized when needed
     
     def fetch_and_filter_stories(self) -> List[Dict]:
         """Fetch stories from HackerNews and filter for AI content."""
@@ -115,8 +119,67 @@ class HNDigestApp:
         
         return summaries
     
+    def _get_email_sender(self) -> EmailSender:
+        """Get email sender instance, initializing if needed."""
+        if self.email_sender is None:
+            self.email_sender = EmailSender()
+        return self.email_sender
+    
+    def _handle_email_failure(self, email_content: str, error_message: str):
+        """Handle email sending failure by saving content locally."""
+        logger.error(f"Email sending failed: {error_message}")
+        
+        # Save digest to local file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"digest_backup_{timestamp}.txt"
+        
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(f"FAILED TO SEND EMAIL: {error_message}\n")
+                f.write("=" * 60 + "\n")
+                f.write(email_content)
+            
+            logger.warning(f"Digest saved to {filename} for manual review")
+        except Exception as e:
+            logger.error(f"Failed to save digest backup: {e}")
+    
+    def _handle_critical_failure(self, error_message: str):
+        """Handle critical failure by attempting fallback email."""
+        logger.error(f"Critical digest generation failure: {error_message}")
+        
+        try:
+            email_sender = self._get_email_sender()
+            success = email_sender.send_fallback_email(error_message)
+            
+            if success:
+                logger.info("Fallback email sent successfully")
+            else:
+                logger.error("Fallback email also failed to send")
+                self._save_error_log(error_message)
+                
+        except Exception as e:
+            logger.error(f"Could not send fallback email: {e}")
+            self._save_error_log(error_message)
+    
+    def _save_error_log(self, error_message: str):
+        """Save error information to local file."""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"digest_error_{timestamp}.txt"
+        
+        try:
+            with open(filename, 'w', encoding='utf-8') as f:
+                f.write(f"HN-Digest Critical Error - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write("=" * 60 + "\n")
+                f.write(f"Error: {error_message}\n")
+                f.write("\nThis error prevented the daily digest from being generated or sent.\n")
+                f.write("Please check the application logs for more details.\n")
+            
+            logger.warning(f"Error log saved to {filename}")
+        except Exception as e:
+            logger.error(f"Failed to save error log: {e}")
+    
     def run_full_digest(self):
-        """Run full digest process (scan, summarize, format)."""
+        """Run full digest process (scan, summarize, format) - print only."""
         stories = self.fetch_and_filter_stories()
         
         if not stories:
@@ -131,12 +194,75 @@ class HNDigestApp:
         # Format the digest
         digest_text = self.summary_formatter.format_digest(stories, summaries, datetime.now())
         
-        # For now, just print the digest (email sending will be in Phase 3)
+        # Print the digest
         print("\n" + "="*60)
         print("GENERATED DIGEST")
         print("="*60)
         print(digest_text)
         print("="*60)
+    
+    def run_full_digest_with_email(self, dry_run: bool = False):
+        """Run full digest process and send via email."""
+        logger.info("Starting full digest generation with email delivery")
+        
+        try:
+            # Generate digest content
+            stories = self.fetch_and_filter_stories()
+            
+            if not stories:
+                logger.warning("No AI stories found - sending empty digest notification")
+                # Still send an email to notify that no stories were found
+                email_content = self.email_formatter.format_email([], {})
+                subject = self.email_formatter.create_subject_line(story_count=0)
+            else:
+                logger.info(f"Found {len(stories)} AI stories to process")
+                
+                # Scrape and summarize articles
+                summaries = self.scrape_and_summarize_stories(stories)
+                
+                # Get scraping stats for the email
+                scraping_stats = {
+                    'successful_scrapes': sum(1 for url in summaries.keys() if summaries[url] and 'Summary not available' not in summaries[url]),
+                    'failed_scrapes': len(stories) - len([s for s in summaries.values() if s and 'Summary not available' not in s]),
+                    'summaries_generated': len([s for s in summaries.values() if s and 'Summary not available' not in s])
+                }
+                
+                # Format email content
+                email_content = self.email_formatter.format_email(stories, summaries, datetime.now(), scraping_stats)
+                subject = self.email_formatter.create_subject_line(story_count=len(stories))
+            
+            # Attempt to send email
+            if dry_run:
+                logger.info("DRY RUN - Email content would be:")
+                print("\n" + "="*60)
+                print(f"Subject: {subject}")
+                print("="*60)
+                print(email_content)
+                print("="*60)
+                return
+            
+            try:
+                email_sender = self._get_email_sender()
+                
+                # Validate configuration before attempting to send
+                if not email_sender.validate_configuration():
+                    raise ValueError("Email configuration validation failed")
+                
+                success = email_sender.send_digest_email(subject, email_content)
+                
+                if success:
+                    logger.info("Digest email sent successfully")
+                else:
+                    self._handle_email_failure(email_content, "Email sending failed after retries")
+                    
+            except ValueError as e:
+                self._handle_email_failure(email_content, f"Email setup failed: {e}")
+            except Exception as e:
+                self._handle_email_failure(email_content, f"Unexpected email error: {e}")
+                
+        except Exception as e:
+            # Critical failure in digest generation
+            self._handle_critical_failure(str(e))
 
 def create_cli_parser() -> argparse.ArgumentParser:
     """Create command line argument parser."""
@@ -146,9 +272,9 @@ def create_cli_parser() -> argparse.ArgumentParser:
     
     parser.add_argument(
         '--mode',
-        choices=['scan', 'full'],
+        choices=['scan', 'full', 'email'],
         default='scan',
-        help='Run mode: scan (filter only), full (complete digest)'
+        help='Run mode: scan (filter only), full (complete digest), email (digest + send email)'
     )
     
     parser.add_argument(
@@ -160,7 +286,7 @@ def create_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--dry-run',
         action='store_true',
-        help='Run without sending emails (future use)'
+        help='Run without sending emails (shows what would be sent)'
     )
     
     return parser
@@ -180,8 +306,12 @@ def main():
         logger.error("EMAIL_RECIPIENT not configured")
         sys.exit(1)
     
-    if args.mode == 'full' and not Config.ANTHROPIC_API_KEY:
-        logger.error("ANTHROPIC_API_KEY not configured but required for full mode")
+    if args.mode in ['full', 'email'] and not Config.ANTHROPIC_API_KEY:
+        logger.error("ANTHROPIC_API_KEY not configured but required for full/email mode")
+        sys.exit(1)
+    
+    if args.mode == 'email' and not args.dry_run and not Config.SENDGRID_API_KEY:
+        logger.error("SENDGRID_API_KEY not configured but required for email mode")
         sys.exit(1)
     
     # Create and run application
@@ -200,6 +330,9 @@ def main():
         
         elif args.mode == 'full':
             app.run_full_digest()
+            
+        elif args.mode == 'email':
+            app.run_full_digest_with_email(dry_run=args.dry_run)
             
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")
