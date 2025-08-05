@@ -1,6 +1,8 @@
 # HackerNews AI Digest
 
-A Python application that scans HackerNews for AI-related content, scrapes article details, generates AI-powered summaries, and delivers them via email as a daily digest.
+My first vibe-coded project. I used Claude Code with Sonnet 4 for everything.
+
+A Python application that scans HackerNews for AI-related content, scrapes article details, generates AI-powered summaries, and ~~delivers them via email as a daily digest~~. (Email delivery does not work at the moment.)
 
 ## Overview
 
@@ -55,15 +57,10 @@ This application automates the process of staying up-to-date with AI-related con
 Create a `.env` file in the root directory with the following variables:
 
 ```env
-# Required for all modes
-EMAIL_RECIPIENT=your.email@example.com
 
 # Required for AI summarization (full and email modes)
 ANTHROPIC_API_KEY=your_anthropic_api_key
 
-# Required for email delivery
-SENDGRID_API_KEY=your_sendgrid_api_key
-EMAIL_SENDER=your.sender@example.com
 ```
 
 ## Usage
@@ -83,6 +80,9 @@ python -m src.hn_digest.main --mode full
 ```
 
 ### Email Mode
+
+NOTE: EMAIL MODE DOES NOT YET WORK
+
 Generates digest and sends via email:
 ```bash
 python -m src.hn_digest.main --mode email
@@ -140,18 +140,6 @@ hn-digest/
 ├── requirements.txt         # Python dependencies
 ├── pyproject.toml          # Project configuration
 └── README.md               # This file
-```
-
-## Scheduling
-
-For automated daily execution, use the provided cron setup:
-
-```bash
-# Make script executable
-chmod +x scripts/daily_digest.sh
-
-# Set up cron job (runs daily at 8 AM)
-./scripts/setup_cron.sh
 ```
 
 ## Dependencies
