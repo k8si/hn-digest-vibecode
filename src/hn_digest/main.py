@@ -310,8 +310,8 @@ def main():
         logger.error("ANTHROPIC_API_KEY not configured but required for full/email mode")
         sys.exit(1)
     
-    if args.mode == 'email' and not args.dry_run and not Config.SENDGRID_API_KEY:
-        logger.error("SENDGRID_API_KEY not configured but required for email mode")
+    if args.mode == 'email' and not args.dry_run and (not Config.GMAIL_USERNAME or not Config.GMAIL_PASSWORD):
+        logger.error("GMAIL_USERNAME and GMAIL_PASSWORD not configured but required for email mode")
         sys.exit(1)
     
     # Create and run application
