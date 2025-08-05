@@ -2,6 +2,8 @@
 
 My first vibe-coded project. I used Claude Code with Sonnet 4 for everything.
 
+Initial prompt: "I would like to build an app that combs through the first few pages of HackerNews, selects links and articles related to AI, summarizes the content of each, then compiles them into a concise digest. Then, I would like the app to email this digest. I would like to run this process every afternoon so I can read a summary of all the AI-related highlights that happened during the day."
+
 A Python application that scans HackerNews for AI-related content, scrapes article details, generates AI-powered summaries, and ~~delivers them via email as a daily digest~~. (Email delivery does not work at the moment.)
 
 ## Overview
