@@ -153,7 +153,7 @@ hn-digest/
 │   ├── ai_summarizer.py     # AI-powered article summarization
 │   ├── podcast_generator.py # Text-to-speech podcast generation
 │   ├── email_formatter.py   # HTML email formatting
-│   └── email_sender.py      # Email delivery via SendGrid
+│   └── email_sender.py      # Email delivery via Google SMTP (DOES NOT WORK ATM)
 ├── tests/                   # Test suite
 ├── scripts/                 # Deployment and automation scripts
 ├── requirements.txt         # Python dependencies
@@ -167,7 +167,6 @@ hn-digest/
 - **beautifulsoup4**: HTML parsing for content extraction
 - **anthropic**: Claude API client for AI summarization
 - **openai**: OpenAI API client for text-to-speech podcast generation
-- **sendgrid**: Email delivery service
 - **python-dotenv**: Environment variable management
 - **pytest**: Testing framework
 - **pytest-mock**: Mocking utilities for tests
