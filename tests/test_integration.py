@@ -1,7 +1,11 @@
 """Integration tests for HackerNews flow."""
+import os
+import tempfile
 import pytest
 from unittest.mock import Mock, patch
 from src.hn_digest.main import HNDigestApp
+from src.hn_digest.podcast_generator import PodcastGenerator
+from src.hn_digest.config import Config
 
 class TestIntegration:
     """Integration test cases for complete HN digest flow."""
@@ -215,3 +219,68 @@ class TestIntegration:
                     'https://premium.site.com/ai-article',
                     'content scraping failed'
                 )
+
+
+class TestPodcastIntegration:
+    """Integration tests for podcast generation functionality."""
+    
+    @pytest.mark.skipif(not Config.OPENAI_API_KEY, reason="OpenAI API key not configured")
+    def test_podcast_generation_with_real_api(self):
+        """Integration test with real OpenAI API - requires API key."""
+        # This test will be skipped if OPENAI_API_KEY is not set
+        generator = PodcastGenerator(Config.OPENAI_API_KEY, Config.TTS_VOICE)
+        
+        # Use short test text to minimize API costs
+        test_text = "This is a test of the OpenAI text-to-speech integration. The podcast generation feature is working correctly."
+        
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+            temp_path = temp_file.name
+            
+        try:
+            # Generate podcast using real API
+            result = generator.generate_podcast(test_text, temp_path)
+            
+            # Verify success
+            assert result is True
+            assert os.path.exists(temp_path)
+            
+            # Verify file has content
+            file_size = os.path.getsize(temp_path)
+            assert file_size > 0
+            
+            # Verify it's a reasonable size for short audio (should be at least a few KB)
+            assert file_size > 1000  # At least 1KB
+            
+            print(f"✓ Real API test passed - Generated {file_size:,} bytes")
+            
+        finally:
+            # Cleanup
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+    
+    def test_podcast_filename_generation(self):
+        """Test podcast filename generation matches digest patterns."""
+        # Test typical digest backup filename
+        digest_filename = "digest_backup_20250805_163045.txt"
+        podcast_filename = PodcastGenerator.get_podcast_filename(digest_filename)
+        assert podcast_filename == "digest_backup_20250805_163045.mp3"
+        
+        # Test simple filename
+        digest_filename = "digest.txt"
+        podcast_filename = PodcastGenerator.get_podcast_filename(digest_filename)
+        assert podcast_filename == "digest.mp3"
+        
+    def test_podcast_generator_configuration(self):
+        """Test podcast generator configuration from Config class."""
+        # Test that configuration values are available
+        assert hasattr(Config, 'OPENAI_API_KEY')
+        assert hasattr(Config, 'TTS_VOICE')
+        assert hasattr(Config, 'PODCAST_ENABLED')
+        
+        # Test default voice
+        assert Config.TTS_VOICE == 'fable'
+        
+        # Test that we can create generator with config values
+        if Config.OPENAI_API_KEY:
+            generator = PodcastGenerator(Config.OPENAI_API_KEY, Config.TTS_VOICE)
+            assert generator.voice == Config.TTS_VOICE

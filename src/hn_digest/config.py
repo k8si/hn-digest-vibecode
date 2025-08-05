@@ -29,6 +29,11 @@ class Config:
     # AI Summarization settings
     ANTHROPIC_MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-3-haiku-20240307')
     
+    # Podcast generation settings
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+    TTS_VOICE = os.getenv('TTS_VOICE', 'fable')
+    PODCAST_ENABLED = os.getenv('PODCAST_ENABLED', 'false').lower() == 'true'
+    
     # HackerNews API settings
     HN_API_BASE_URL = 'https://hacker-news.firebaseio.com/v0'
     HN_TOP_STORIES_URL = f'{HN_API_BASE_URL}/topstories.json'
