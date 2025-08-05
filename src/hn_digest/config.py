@@ -20,7 +20,8 @@ def setup_logging():
 
 # Configuration settings
 class Config:
-    SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY')
+    GMAIL_USERNAME = os.getenv('GMAIL_USERNAME')
+    GMAIL_PASSWORD = os.getenv('GMAIL_PASSWORD')
     EMAIL_RECIPIENT = os.getenv('EMAIL_RECIPIENT', 'ksilverstein@mozilla.com')
     USERNAME = os.getenv('USERNAME', 'Kate')
     ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')

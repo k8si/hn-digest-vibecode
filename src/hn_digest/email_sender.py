@@ -1,30 +1,34 @@
-"""Email sending functionality using SendGrid."""
+"""Email sending functionality using Gmail SMTP."""
 import logging
+import smtplib
 import time
+from email.mime.text import MIMEText
 from typing import Optional
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail, Email, To, Content
 from .config import Config
 
 logger = logging.getLogger(__name__)
 
 class EmailSender:
-    """Handles email sending via SendGrid with retry logic."""
+    """Handles email sending via Gmail SMTP with retry logic."""
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, gmail_username: Optional[str] = None, gmail_password: Optional[str] = None):
         """
         Initialize the email sender.
         
         Args:
-            api_key: SendGrid API key (defaults to Config.SENDGRID_API_KEY)
+            gmail_username: Gmail username (defaults to Config.GMAIL_USERNAME)
+            gmail_password: Gmail App Password (defaults to Config.GMAIL_PASSWORD)
         """
-        self.api_key = api_key or Config.SENDGRID_API_KEY
-        if not self.api_key:
-            raise ValueError("SendGrid API key is required")
+        self.gmail_username = gmail_username or Config.GMAIL_USERNAME
+        self.gmail_password = gmail_password or Config.GMAIL_PASSWORD
         
-        self.client = SendGridAPIClient(api_key=self.api_key)
-        self.from_email = Email("noreply@hackernews-digest.com", "HN AI Digest")
-        self.to_email = To(Config.EMAIL_RECIPIENT, Config.USERNAME)
+        if not self.gmail_username:
+            raise ValueError("Gmail username is required")
+        if not self.gmail_password:
+            raise ValueError("Gmail App Password is required")
+        
+        self.from_email = self.gmail_username
+        self.to_email = Config.EMAIL_RECIPIENT
     
     def send_digest_email(
         self, 
@@ -48,26 +52,21 @@ class EmailSender:
         logger.info(f"Attempting to send email: {subject}")
         
         # Create email message
-        mail = Mail(
-            from_email=self.from_email,
-            to_emails=self.to_email,
-            subject=subject,
-            plain_text_content=Content("text/plain", content)
-        )
+        msg = MIMEText(content)
+        msg['Subject'] = subject
+        msg['From'] = self.from_email
+        msg['To'] = self.to_email
         
         # Attempt to send with retries
         last_error = None
         for attempt in range(max_retries):
             try:
-                response = self.client.send(mail)
+                with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                    server.login(self.gmail_username, self.gmail_password)
+                    server.sendmail(self.from_email, [self.to_email], msg.as_string())
                 
-                # SendGrid returns 202 for successful acceptance
-                if response.status_code == 202:
-                    logger.info(f"Email sent successfully on attempt {attempt + 1}")
-                    return True
-                else:
-                    logger.warning(f"SendGrid returned unexpected status code: {response.status_code}")
-                    last_error = f"Unexpected status code: {response.status_code}"
+                logger.info(f"Email sent successfully on attempt {attempt + 1}")
+                return True
                     
             except Exception as e:
                 last_error = str(e)
@@ -104,18 +103,18 @@ class EmailSender:
     
     def test_connection(self) -> bool:
         """
-        Test SendGrid API connection.
+        Test Gmail SMTP connection.
         
         Returns:
             True if connection is working, False otherwise
         """
         try:
-            # Try to get API key info (this doesn't send an email)
-            response = self.client.client.user.profile.get()
-            logger.info("SendGrid API connection test successful")
-            return response.status_code == 200
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                server.login(self.gmail_username, self.gmail_password)
+            logger.info("Gmail SMTP connection test successful")
+            return True
         except Exception as e:
-            logger.error(f"SendGrid API connection test failed: {e}")
+            logger.error(f"Gmail SMTP connection test failed: {e}")
             return False
     
     def validate_configuration(self) -> bool:
@@ -127,8 +126,11 @@ class EmailSender:
         """
         issues = []
         
-        if not self.api_key:
-            issues.append("SENDGRID_API_KEY is not set")
+        if not self.gmail_username:
+            issues.append("GMAIL_USERNAME is not set")
+        
+        if not self.gmail_password:
+            issues.append("GMAIL_PASSWORD is not set")
         
         if not Config.EMAIL_RECIPIENT:
             issues.append("EMAIL_RECIPIENT is not set")
