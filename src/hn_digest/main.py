@@ -13,6 +13,7 @@ from .ai_summarizer import AISummarizer
 from .summary_formatter import SummaryFormatter
 from .email_formatter import EmailFormatter
 from .email_sender import EmailSender
+from .podcast_generator import PodcastGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class HNDigestApp:
         self.summary_formatter = SummaryFormatter()
         self.email_formatter = EmailFormatter()
         self.email_sender = None  # Initialized when needed
+        self.podcast_generator = None  # Initialized when needed
     
     def fetch_and_filter_stories(self) -> List[Dict]:
         """Fetch stories from HackerNews and filter for AI content."""
@@ -125,7 +127,43 @@ class HNDigestApp:
             self.email_sender = EmailSender()
         return self.email_sender
     
-    def _handle_email_failure(self, email_content: str, error_message: str):
+    def _get_podcast_generator(self) -> PodcastGenerator:
+        """Get podcast generator instance, initializing if needed."""
+        if self.podcast_generator is None:
+            self.podcast_generator = PodcastGenerator(
+                api_key=Config.OPENAI_API_KEY,
+                voice=Config.TTS_VOICE
+            )
+        return self.podcast_generator
+    
+    def generate_podcast(self, digest_text: str, output_filename: str) -> bool:
+        """
+        Generate podcast from digest text.
+        
+        Args:
+            digest_text: The formatted digest text to convert to speech
+            output_filename: Full path for the output MP3 file
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            logger.info("Starting podcast generation...")
+            podcast_generator = self._get_podcast_generator()
+            success = podcast_generator.generate_podcast(digest_text, output_filename)
+            
+            if success:
+                logger.info(f"Podcast generation completed successfully: {output_filename}")
+            else:
+                logger.error("Podcast generation failed")
+                
+            return success
+            
+        except Exception as e:
+            logger.error(f"Podcast generation error: {e}")
+            return False
+    
+    def _handle_email_failure(self, email_content: str, error_message: str, generate_podcast: bool = False):
         """Handle email sending failure by saving content locally."""
         logger.error(f"Email sending failed: {error_message}")
         
@@ -140,6 +178,21 @@ class HNDigestApp:
                 f.write(email_content)
             
             logger.warning(f"Digest saved to {filename} for manual review")
+            
+            # Generate podcast if requested (even if email failed)
+            if generate_podcast:
+                podcast_filename = PodcastGenerator.get_podcast_filename(filename)
+                logger.info(f"Generating podcast from backup digest: {podcast_filename}")
+                
+                # Extract just the digest content (skip the error header)
+                digest_content = email_content
+                success = self.generate_podcast(digest_content, podcast_filename)
+                
+                if success:
+                    logger.info(f"Podcast generated successfully: {podcast_filename}")
+                else:
+                    logger.error("Podcast generation failed for backup digest")
+                    
         except Exception as e:
             logger.error(f"Failed to save digest backup: {e}")
     
@@ -178,7 +231,7 @@ class HNDigestApp:
         except Exception as e:
             logger.error(f"Failed to save error log: {e}")
     
-    def run_full_digest(self):
+    def run_full_digest(self, generate_podcast: bool = False):
         """Run full digest process (scan, summarize, format) - print only."""
         stories = self.fetch_and_filter_stories()
         
@@ -194,14 +247,38 @@ class HNDigestApp:
         # Format the digest
         digest_text = self.summary_formatter.format_digest(stories, summaries, datetime.now())
         
+        # Save digest to file
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        digest_filename = f"digest_{timestamp}.txt"
+        
+        try:
+            with open(digest_filename, 'w', encoding='utf-8') as f:
+                f.write(digest_text)
+            logger.info(f"Digest saved to {digest_filename}")
+        except Exception as e:
+            logger.error(f"Failed to save digest file: {e}")
+            
         # Print the digest
         print("\n" + "="*60)
         print("GENERATED DIGEST")
         print("="*60)
         print(digest_text)
         print("="*60)
+        print(f"\nDigest saved to: {digest_filename}")
+        
+        # Generate podcast if requested
+        if generate_podcast:
+            podcast_filename = PodcastGenerator.get_podcast_filename(digest_filename)
+            
+            logger.info(f"Generating podcast: {podcast_filename}")
+            success = self.generate_podcast(digest_text, podcast_filename)
+            
+            if success:
+                print(f"✓ Podcast generated: {podcast_filename}")
+            else:
+                print(f"✗ Podcast generation failed - check logs for details")
     
-    def run_full_digest_with_email(self, dry_run: bool = False):
+    def run_full_digest_with_email(self, dry_run: bool = False, generate_podcast: bool = False):
         """Run full digest process and send via email."""
         logger.info("Starting full digest generation with email delivery")
         
@@ -252,13 +329,36 @@ class HNDigestApp:
                 
                 if success:
                     logger.info("Digest email sent successfully")
+                    
+                    # Generate podcast if requested and email was successful
+                    if generate_podcast:
+                        # Save digest content to file for podcast generation
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        digest_filename = f"digest_{timestamp}.txt"
+                        
+                        try:
+                            with open(digest_filename, 'w', encoding='utf-8') as f:
+                                f.write(email_content)
+                            logger.info(f"Digest saved to {digest_filename}")
+                            
+                            podcast_filename = PodcastGenerator.get_podcast_filename(digest_filename)
+                            logger.info(f"Generating podcast: {podcast_filename}")
+                            
+                            podcast_success = self.generate_podcast(email_content, podcast_filename)
+                            if podcast_success:
+                                logger.info(f"Podcast generated successfully: {podcast_filename}")
+                            else:
+                                logger.error("Podcast generation failed after successful email")
+                                
+                        except Exception as e:
+                            logger.error(f"Failed to save digest or generate podcast: {e}")
                 else:
-                    self._handle_email_failure(email_content, "Email sending failed after retries")
+                    self._handle_email_failure(email_content, "Email sending failed after retries", generate_podcast)
                     
             except ValueError as e:
-                self._handle_email_failure(email_content, f"Email setup failed: {e}")
+                self._handle_email_failure(email_content, f"Email setup failed: {e}", generate_podcast)
             except Exception as e:
-                self._handle_email_failure(email_content, f"Unexpected email error: {e}")
+                self._handle_email_failure(email_content, f"Unexpected email error: {e}", generate_podcast)
                 
         except Exception as e:
             # Critical failure in digest generation
@@ -289,6 +389,12 @@ def create_cli_parser() -> argparse.ArgumentParser:
         help='Run without sending emails (shows what would be sent)'
     )
     
+    parser.add_argument(
+        '--podcast',
+        action='store_true',
+        help='Generate podcast audio file from digest content'
+    )
+    
     return parser
 
 def main():
@@ -314,6 +420,10 @@ def main():
         logger.error("GMAIL_USERNAME and GMAIL_PASSWORD not configured but required for email mode")
         sys.exit(1)
     
+    if args.podcast and not Config.OPENAI_API_KEY:
+        logger.error("OPENAI_API_KEY not configured but required for podcast generation")
+        sys.exit(1)
+    
     # Create and run application
     app = HNDigestApp()
     
@@ -327,12 +437,15 @@ def main():
                 if story['url']:
                     print(f"    URL: {story['url']}")
                 print()
+            
+            if args.podcast:
+                print("Note: --podcast flag is ignored in scan mode. Use --mode=full or --mode=email to generate podcasts.")
         
         elif args.mode == 'full':
-            app.run_full_digest()
+            app.run_full_digest(generate_podcast=args.podcast)
             
         elif args.mode == 'email':
-            app.run_full_digest_with_email(dry_run=args.dry_run)
+            app.run_full_digest_with_email(dry_run=args.dry_run, generate_podcast=args.podcast)
             
     except KeyboardInterrupt:
         logger.info("Operation cancelled by user")

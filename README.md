@@ -4,7 +4,7 @@ My first vibe-coded project. I used Claude Code with Sonnet 4 for everything.
 
 Initial prompt: "I would like to build an app that combs through the first few pages of HackerNews, selects links and articles related to AI, summarizes the content of each, then compiles them into a concise digest. Then, I would like the app to email this digest. I would like to run this process every afternoon so I can read a summary of all the AI-related highlights that happened during the day."
 
-A Python application that scans HackerNews for AI-related content, scrapes article details, generates AI-powered summaries, and ~~delivers them via email as a daily digest~~. (Email delivery does not work at the moment.)
+A Python application that scans HackerNews for AI-related content, scrapes article details, generates AI-powered summaries, creates audio podcasts, and ~~delivers them via email as a daily digest~~. (Email delivery does not work at the moment.)
 
 ## Overview
 
@@ -13,13 +13,15 @@ This application automates the process of staying up-to-date with AI-related con
 1. **Fetching and Filtering**: Retrieves top stories from HackerNews API and filters for AI-related content based on keywords and scoring
 2. **Content Scraping**: Extracts full article content from linked URLs using web scraping techniques
 3. **AI Summarization**: Generates concise summaries of articles using Anthropic's Claude API
-4. **Email Delivery**: Formats and sends daily digest emails with summaries and links
+4. **Podcast Generation**: Converts digest text to audio using OpenAI's Text-to-Speech API
+5. **Email Delivery**: Formats and sends daily digest emails with summaries and links
 
 ## Features
 
 - Smart AI content detection using keyword matching and scoring algorithms
 - Robust web scraping with fallback handling for inaccessible content
 - AI-powered article summarization with fallback for failures
+- Text-to-speech podcast generation with configurable voices
 - Email delivery with HTML formatting and detailed statistics
 - Multiple operation modes (scan-only, full digest, email delivery)
 - Comprehensive logging and error handling
@@ -63,6 +65,9 @@ Create a `.env` file in the root directory with the following variables:
 # Required for AI summarization (full and email modes)
 ANTHROPIC_API_KEY=your_anthropic_api_key
 
+# Required for podcast generation (when using --podcast flag)
+OPENAI_API_KEY=your_openai_api_key
+
 ```
 
 ## Usage
@@ -81,6 +86,11 @@ Generates complete digest with AI summaries and prints to console:
 python -m src.hn_digest.main --mode full
 ```
 
+Add `--podcast` to also generate an audio version:
+```bash
+python -m src.hn_digest.main --mode full --podcast
+```
+
 ### Email Mode
 
 NOTE: EMAIL MODE DOES NOT YET WORK
@@ -90,14 +100,20 @@ Generates digest and sends via email:
 python -m src.hn_digest.main --mode email
 ```
 
+Add `--podcast` to also generate an audio version:
+```bash
+python -m src.hn_digest.main --mode email --podcast
+```
+
 ### Additional Options
 
 - `--debug`: Enable debug logging
 - `--dry-run`: Show email content without sending (email mode only)
+- `--podcast`: Generate audio podcast from digest content (full and email modes)
 
 Example with options:
 ```bash
-python -m src.hn_digest.main --mode email --dry-run --debug
+python -m src.hn_digest.main --mode email --dry-run --debug --podcast
 ```
 
 ## Running Tests
@@ -135,6 +151,7 @@ hn-digest/
 │   ├── content_filter.py    # AI content filtering and scoring
 │   ├── article_scraper.py   # Web scraping for article content
 │   ├── ai_summarizer.py     # AI-powered article summarization
+│   ├── podcast_generator.py # Text-to-speech podcast generation
 │   ├── email_formatter.py   # HTML email formatting
 │   └── email_sender.py      # Email delivery via SendGrid
 ├── tests/                   # Test suite
@@ -149,6 +166,7 @@ hn-digest/
 - **requests**: HTTP client for API calls and web scraping
 - **beautifulsoup4**: HTML parsing for content extraction
 - **anthropic**: Claude API client for AI summarization
+- **openai**: OpenAI API client for text-to-speech podcast generation
 - **sendgrid**: Email delivery service
 - **python-dotenv**: Environment variable management
 - **pytest**: Testing framework
