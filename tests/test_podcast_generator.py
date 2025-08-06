@@ -177,3 +177,86 @@ class TestPodcastGenerator:
         """Test that default voice is 'fable'."""
         generator = PodcastGenerator("test-api-key")
         assert generator.voice == "fable"
+    
+    def test_split_text_into_chunks_short_text(self):
+        """Test text splitting with short text that doesn't need chunking."""
+        generator = PodcastGenerator("test-api-key", "fable")
+        short_text = "This is a short text that doesn't need chunking."
+        
+        chunks = generator._split_text_into_chunks(short_text)
+        
+        assert len(chunks) == 1
+        assert chunks[0] == short_text
+    
+    def test_split_text_into_chunks_long_text(self):
+        """Test text splitting with long text that needs chunking."""
+        generator = PodcastGenerator("test-api-key", "fable")
+        
+        # Create a text longer than MAX_CHUNK_SIZE
+        long_text = "This is a test sentence. " * 200  # Should be > 4000 chars
+        
+        chunks = generator._split_text_into_chunks(long_text)
+        
+        assert len(chunks) > 1
+        for chunk in chunks:
+            assert len(chunk) <= generator.MAX_CHUNK_SIZE
+        
+        # Verify all chunks combined equal original text (minus whitespace)
+        combined = ''.join(chunks).replace('  ', ' ')
+        original_normalized = long_text.replace('  ', ' ')
+        assert combined.strip() == original_normalized.strip()
+    
+    def test_split_text_sentence_boundaries(self):
+        """Test that text splitting prefers sentence boundaries."""
+        generator = PodcastGenerator("test-api-key", "fable")
+        
+        # Create text with clear sentence boundaries
+        sentences = ["This is sentence one. ", "This is sentence two. ", "This is sentence three. "]
+        # Repeat to make it long enough to require chunking
+        base_text = ''.join(sentences) * 100
+        
+        chunks = generator._split_text_into_chunks(base_text)
+        
+        # Each chunk should end with sentence punctuation (except possibly the last)
+        for i, chunk in enumerate(chunks[:-1]):  # Check all but last chunk
+            assert chunk.rstrip().endswith(('.', '!', '?')), f"Chunk {i} doesn't end with sentence punctuation"
+    
+    @patch('src.hn_digest.podcast_generator.OpenAI')
+    def test_generate_podcast_long_text_multiple_chunks(self, mock_openai_class):
+        """Test podcast generation with long text requiring multiple chunks."""
+        # Setup mocks
+        mock_client = Mock()
+        mock_openai_class.return_value = mock_client
+        
+        mock_response = Mock()
+        mock_client.audio.speech.create.return_value = mock_response
+        
+        # Create a long text that will require chunking
+        long_text = "This is a very long text that exceeds the character limit. " * 100
+        
+        # Create temporary file for testing
+        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_file:
+            temp_path = temp_file.name
+            
+        try:
+            # Mock the stream_to_file method to create files
+            def mock_stream_to_file(path):
+                with open(path, 'wb') as f:
+                    f.write(b'fake mp3 content for chunk')
+                    
+            mock_response.stream_to_file = mock_stream_to_file
+            
+            generator = PodcastGenerator("test-api-key", "fable")
+            result = generator.generate_podcast(long_text, temp_path)
+            
+            assert result is True
+            assert os.path.exists(temp_path)
+            assert os.path.getsize(temp_path) > 0
+            
+            # Verify API was called multiple times (once per chunk)
+            assert mock_client.audio.speech.create.call_count > 1
+            
+        finally:
+            # Cleanup
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
