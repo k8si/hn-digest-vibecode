@@ -2,9 +2,22 @@
 
 My first vibe-coded project. I used Claude Code with Sonnet 4 for everything.
 
-Initial prompt: "I would like to build an app that combs through the first few pages of HackerNews, selects links and articles related to AI, summarizes the content of each, then compiles them into a concise digest. Then, I would like the app to email this digest. I would like to run this process every afternoon so I can read a summary of all the AI-related highlights that happened during the day."
+A Python application that scans HackerNews for AI-related content, scrapes article details, generates AI-powered summaries, then sends the digest to OpenAI TTS to create a podcast. 
 
-A Python application that scans HackerNews for AI-related content, scrapes article details, generates AI-powered summaries, creates audio podcasts, and ~~delivers them via email as a daily digest~~. (Email delivery does not work at the moment.)
+I tried to also have the system deliver a daily digest email but I haven't been able to get email to work yet.
+
+## Quickstart
+
+```bash
+   git clone <repository-url>
+   cd hn-digest
+   uv sync
+   export ANTHROPIC_API_KEY=your_anthropic_api_key
+   export OPENAI_API_KEY=your_openai_api_key # for podcast generation
+   uv run python -m src.hn_digest.main --mode full --podcast
+```
+
+This should create two files: `digest_<timestamp>.txt` and `digest_<timestamp>.mp3` in the current directory, containing the digest text and audio podcast respectively.
 
 ## Overview
 
@@ -14,7 +27,9 @@ This application automates the process of staying up-to-date with AI-related con
 2. **Content Scraping**: Extracts full article content from linked URLs using web scraping techniques
 3. **AI Summarization**: Generates concise summaries of articles using Anthropic's Claude API
 4. **Podcast Generation**: Converts digest text to audio using OpenAI's Text-to-Speech API
-5. **Email Delivery**: Formats and sends daily digest emails with summaries and links
+5. ~~**Email Delivery**: Formats and sends daily digest emails with summaries and links~~ (DOES NOT WORK YET) 
+
+Initial prompt: "I would like to build an app that combs through the first few pages of HackerNews, selects links and articles related to AI, summarizes the content of each, then compiles them into a concise digest. Then, I would like the app to email this digest. I would like to run this process every afternoon so I can read a summary of all the AI-related highlights that happened during the day."
 
 ## Features
 
@@ -22,7 +37,7 @@ This application automates the process of staying up-to-date with AI-related con
 - Robust web scraping with fallback handling for inaccessible content
 - AI-powered article summarization with fallback for failures
 - Text-to-speech podcast generation with configurable voices
-- Email delivery with HTML formatting and detailed statistics
+- ~~Email delivery with HTML formatting and detailed statistics~~~ (DOES NOT WORK YET)
 - Multiple operation modes (scan-only, full digest, email delivery)
 - Comprehensive logging and error handling
 - Dry-run mode for testing email content without sending
@@ -32,7 +47,7 @@ This application automates the process of staying up-to-date with AI-related con
 ### Prerequisites
 
 - Python 3.11 or higher
-- pip or uv package manager
+- uv package manager ([installation guide](https://docs.astral.sh/uv/getting-started/installation/))
 
 ### Setup
 
@@ -44,16 +59,7 @@ This application automates the process of staying up-to-date with AI-related con
 
 2. Install dependencies:
    ```bash
-   # Using pip
-   pip install -r requirements.txt
-   
-   # Or using uv (recommended)
    uv sync
-   ```
-
-3. Install the package in development mode:
-   ```bash
-   pip install -e .
    ```
 
 ### Environment Configuration
@@ -77,18 +83,18 @@ The application supports three operation modes:
 ### Scan Mode (Default)
 Scans HackerNews and shows AI-related stories without processing them:
 ```bash
-python -m src.hn_digest.main --mode scan
+uv run python -m src.hn_digest.main --mode scan
 ```
 
 ### Full Digest Mode
 Generates complete digest with AI summaries and prints to console:
 ```bash
-python -m src.hn_digest.main --mode full
+uv run python -m src.hn_digest.main --mode full
 ```
 
 Add `--podcast` to also generate an audio version:
 ```bash
-python -m src.hn_digest.main --mode full --podcast
+uv run python -m src.hn_digest.main --mode full --podcast
 ```
 
 ### Email Mode
@@ -97,12 +103,12 @@ NOTE: EMAIL MODE DOES NOT YET WORK
 
 Generates digest and sends via email:
 ```bash
-python -m src.hn_digest.main --mode email
+uv run python -m src.hn_digest.main --mode email
 ```
 
 Add `--podcast` to also generate an audio version:
 ```bash
-python -m src.hn_digest.main --mode email --podcast
+uv run python -m src.hn_digest.main --mode email --podcast
 ```
 
 ### Additional Options
@@ -113,7 +119,7 @@ python -m src.hn_digest.main --mode email --podcast
 
 Example with options:
 ```bash
-python -m src.hn_digest.main --mode email --dry-run --debug --podcast
+uv run python -m src.hn_digest.main --mode email --dry-run --debug --podcast
 ```
 
 ## Running Tests
@@ -122,16 +128,16 @@ The project uses pytest for testing. Run tests with:
 
 ```bash
 # Run all tests
-pytest
+uv run pytest
 
 # Run with verbose output
-pytest -v
+uv run pytest -v
 
 # Run specific test file
-pytest tests/test_integration.py
+uv run pytest tests/test_integration.py
 
 # Run with coverage
-pytest --cov=src/hn_digest
+uv run pytest --cov=src/hn_digest
 ```
 
 ### Test Structure
@@ -156,7 +162,6 @@ hn-digest/
 │   └── email_sender.py      # Email delivery via Google SMTP (DOES NOT WORK ATM)
 ├── tests/                   # Test suite
 ├── scripts/                 # Deployment and automation scripts
-├── requirements.txt         # Python dependencies
 ├── pyproject.toml          # Project configuration
 └── README.md               # This file
 ```
