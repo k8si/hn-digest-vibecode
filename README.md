@@ -37,7 +37,7 @@ Initial prompt: "I would like to build an app that combs through the first few p
 - Robust web scraping with fallback handling for inaccessible content
 - AI-powered article summarization with fallback for failures
 - Text-to-speech podcast generation with configurable voices
-- ~~Email delivery with HTML formatting and detailed statistics~~~ (DOES NOT WORK YET)
+- ~~Email delivery with HTML formatting and detailed statistics~~ (DOES NOT WORK YET)
 - Multiple operation modes (scan-only, full digest, email delivery)
 - Comprehensive logging and error handling
 - Dry-run mode for testing email content without sending
@@ -97,20 +97,6 @@ Add `--podcast` to also generate an audio version:
 uv run python -m src.hn_digest.main --mode full --podcast
 ```
 
-### Email Mode
-
-NOTE: EMAIL MODE DOES NOT YET WORK
-
-Generates digest and sends via email:
-```bash
-uv run python -m src.hn_digest.main --mode email
-```
-
-Add `--podcast` to also generate an audio version:
-```bash
-uv run python -m src.hn_digest.main --mode email --podcast
-```
-
 ### Additional Options
 
 - `--debug`: Enable debug logging
@@ -165,16 +151,6 @@ hn-digest/
 ├── pyproject.toml          # Project configuration
 └── README.md               # This file
 ```
-
-## Dependencies
-
-- **requests**: HTTP client for API calls and web scraping
-- **beautifulsoup4**: HTML parsing for content extraction
-- **anthropic**: Claude API client for AI summarization
-- **openai**: OpenAI API client for text-to-speech podcast generation
-- **python-dotenv**: Environment variable management
-- **pytest**: Testing framework
-- **pytest-mock**: Mocking utilities for tests
 
 ## License
 
